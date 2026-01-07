@@ -576,6 +576,109 @@ pub fn fmt_autolinks(builder: &Builder, text: &str) -> String {
     annotations.into_result()
 }
 
+fn fmt_inline_tags_recursive(
+    entity: &CppItem,
+    config: Arc<Config>,
+    target: &str,
+) -> Option<String> {
+    if entity.name() == target {
+        return entity.entity().abs_docs_url(config);
+    }
+    
+    if let CppItem::Namespace(ns) = entity {
+        for v in ns.entries.values() {
+            if let Some(url) = fmt_inline_tags_recursive(v, config.clone(), target) {
+                return Some(url);
+            }
+        }
+    }
+    
+    None
+}
+
+pub fn fmt_inline_tags(builder: &Builder, text: &str) -> String {
+    let mut res = String::new();
+    let mut iter = text.chars().multipeek();
+    
+    while let Some(c) = iter.next() {
+        if c == '{' && iter.peek() == Some(&'@') {
+            // Consume '@'
+            iter.next();
+            
+            // Read tag name
+            let mut tag = String::new();
+            while let Some(&ch) = iter.peek() {
+                if ch.is_whitespace() || ch == '}' {
+                    break;
+                }
+                tag.push(ch);
+                iter.next();
+            }
+            
+            // Skip whitespace
+            while let Some(&ch) = iter.peek() {
+                if !ch.is_whitespace() || ch == '}' {
+                    break;
+                }
+                iter.next();
+            }
+            
+            // Read content until closing brace
+            let mut content = String::new();
+            let mut depth = 0;
+            while let Some(ch) = iter.next() {
+                if ch == '{' {
+                    depth += 1;
+                    content.push(ch);
+                } else if ch == '}' {
+                    if depth == 0 {
+                        break;
+                    }
+                    depth -= 1;
+                    content.push(ch);
+                } else {
+                    content.push(ch);
+                }
+            }
+            
+            // Process the tag
+            match tag.as_str() {
+                "link" => {
+                    // Parse link target and optional display text
+                    let parts: Vec<&str> = content.splitn(2, '|').collect();
+                    let target = parts[0].trim();
+                    let display = parts.get(1).map(|s| s.trim()).unwrap_or(target);
+                    
+                    // Try to find the entity and get its URL
+                    let mut found_url = None;
+                    for entry in builder.root.entries.values() {
+                        if let Some(url) = fmt_inline_tags_recursive(entry, builder.config.clone(), target) {
+                            found_url = Some(url);
+                            break;
+                        }
+                    }
+                    
+                    // Generate markdown link
+                    if let Some(url) = found_url {
+                        res.push_str(&format!("[{}]({})", display, url));
+                    } else {
+                        // If not found, just output the display text
+                        res.push_str(display);
+                    }
+                }
+                _ => {
+                    // Unknown inline tag, preserve it
+                    res.push_str(&format!("{{@{} {}}}", tag, content));
+                }
+            }
+        } else {
+            res.push(c);
+        }
+    }
+    
+    res
+}
+
 pub fn fmt_emoji(text: &CowStr) -> String {
     fn eat_emoji<'e>(iter: &mut MultiPeek<Chars>) -> Option<&'e str> {
         let mut buffer = String::new();

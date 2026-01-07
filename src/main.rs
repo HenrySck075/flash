@@ -1,6 +1,3 @@
-#![feature(let_chains)]
-#![feature(iter_advance_by)]
-#![feature(iter_intersperse)]
 
 use crate::{analyze::create_docs, normalize::Normalize, url::UrlPath};
 use clap::Parser;

@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    builder::Builder, markdown::fmt_markdown, shared::fmt_autolinks, traits::EntityMethods,
+    builder::Builder, markdown::fmt_markdown, shared::{fmt_autolinks, fmt_inline_tags}, traits::EntityMethods,
 };
 
 struct CommentLexer<'s> {
@@ -627,7 +627,7 @@ impl<'e> JSDocComment<'e> {
                     .map(|d| {
                         fmt_markdown(
                             self.builder,
-                            &fmt_autolinks(self.builder, d),
+                            &fmt_autolinks(self.builder, &fmt_inline_tags(self.builder, d)),
                             None::<fn(_) -> _>,
                         )
                     })
